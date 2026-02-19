@@ -41,8 +41,16 @@ export const extractApiError = (error: unknown): string => {
 };
 
 export const api = {
-  async login(email: string, password: string): Promise<{ token: string; user: AuthUser }> {
+  async login(email: string, password: string): Promise<
+    | { token: string; user: AuthUser; requiresTwoFactor?: never; challengeToken?: never }
+    | { requiresTwoFactor: true; challengeToken: string; token?: never; user?: never }
+  > {
     const response = await client.post('/api/auth/login', { email, password });
+    return response.data;
+  },
+
+  async completeTotpLogin(challengeToken: string, code: string): Promise<{ token: string; user: AuthUser }> {
+    const response = await client.post('/api/auth/2fa/complete-login', { challengeToken, code });
     return response.data;
   },
 
@@ -148,5 +156,18 @@ export const api = {
 
   async deleteCommandRun(id: string): Promise<void> {
     await client.delete(`/api/command-runs/${id}`);
+  },
+
+  async setup2FA(): Promise<{ secret: string; qrCodeDataUrl: string }> {
+    const response = await client.post('/api/auth/2fa/setup');
+    return response.data;
+  },
+
+  async confirm2FA(code: string): Promise<void> {
+    await client.post('/api/auth/2fa/confirm', { code });
+  },
+
+  async disable2FA(code: string): Promise<void> {
+    await client.post('/api/auth/2fa/disable', { code });
   }
 };

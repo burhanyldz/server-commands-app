@@ -306,10 +306,11 @@ const StepBuilder = ({
 };
 
 const LoginScreen = () => {
-  const { login, bootstrapAdmin } = useAuth();
+  const { login, bootstrapAdmin, twoFactorPending, completeTotpLogin, logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [bootstrapToken, setBootstrapToken] = useState('');
+  const [totpCode, setTotpCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBootstrap, setShowBootstrap] = useState(false);
@@ -328,6 +329,21 @@ const LoginScreen = () => {
     }
   };
 
+  const handleTotpLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await completeTotpLogin(totpCode);
+    } catch (err) {
+      setError(formatAuthError(err));
+      setTotpCode('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleBootstrap = async (event: React.FormEvent) => {
     event.preventDefault();
     setIsSubmitting(true);
@@ -341,6 +357,56 @@ const LoginScreen = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (twoFactorPending) {
+    return (
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,173,96,0.35),_transparent_35%),radial-gradient(circle_at_85%_20%,_rgba(39,159,191,0.28),_transparent_30%),linear-gradient(160deg,#f8fcff_0%,#fffaf2_65%,#f6fbff_100%)]" />
+        <section className="w-full max-w-md rounded-3xl border border-sky-100 bg-white/90 p-8 shadow-[0_20px_55px_rgba(31,111,138,0.18)] backdrop-blur animate-[fadeIn_0.5s_ease]">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-sky-600">Server Commands</p>
+          <h1 className="mb-1 text-3xl font-black text-slate-900">Two-Factor Auth</h1>
+          <p className="mb-6 text-sm text-slate-600">
+            Open your authenticator app and enter the 6-digit code for Server Commands.
+          </p>
+
+          <form className="space-y-4" onSubmit={handleTotpLogin}>
+            <label className="block text-sm font-semibold text-slate-700">
+              Authenticator Code
+              <input
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-2xl font-mono tracking-[0.5em] outline-none ring-0 transition focus:border-sky-500"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={totpCode}
+                onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, ''))}
+                autoFocus
+                required
+              />
+            </label>
+
+            {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={isSubmitting || totpCode.length < 6}
+              className="w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? 'Verifying...' : 'Verify'}
+            </button>
+          </form>
+
+          <button
+            type="button"
+            className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-slate-700"
+            onClick={() => { logout(); setError(null); setTotpCode(''); }}
+          >
+            Back to sign in
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
@@ -420,7 +486,7 @@ const LoginScreen = () => {
 };
 
 const DashboardScreen = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, setup2FA, confirm2FA, disable2FA } = useAuth();
 
   const [directories, setDirectories] = useState<DirectoryRecord[]>([]);
   const [commands, setCommands] = useState<CommandRecord[]>([]);
@@ -451,6 +517,16 @@ const DashboardScreen = () => {
   const [managementTab, setManagementTab] = useState<DefinitionManagementTab>('directories');
   const [isAddingDirectory, setIsAddingDirectory] = useState(false);
   const [isAddingCommand, setIsAddingCommand] = useState(false);
+
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [totpQrCode, setTotpQrCode] = useState('');
+  const [totpSecret, setTotpSecret] = useState('');
+  const [setupStep, setSetupStep] = useState<'idle' | 'scanning'>('idle');
+  const [totpSetupCode, setTotpSetupCode] = useState('');
+  const [totpDisableCode, setTotpDisableCode] = useState('');
+  const [securityMessage, setSecurityMessage] = useState<string | null>(null);
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const [isSecuritySubmitting, setIsSecuritySubmitting] = useState(false);
 
   const pageSize = 15;
 
@@ -510,19 +586,20 @@ const DashboardScreen = () => {
   }, [runsPage]);
 
   useEffect(() => {
-    if (!isDefinitionsModalOpen) {
+    if (!isDefinitionsModalOpen && !isSecurityModalOpen) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsDefinitionsModalOpen(false);
+        setIsSecurityModalOpen(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDefinitionsModalOpen]);
+  }, [isDefinitionsModalOpen, isSecurityModalOpen]);
 
   useEffect(() => {
     if (!isDefinitionsModalOpen) {
@@ -530,6 +607,18 @@ const DashboardScreen = () => {
       setIsAddingCommand(false);
     }
   }, [isDefinitionsModalOpen]);
+
+  useEffect(() => {
+    if (!isSecurityModalOpen) {
+      setSetupStep('idle');
+      setTotpQrCode('');
+      setTotpSecret('');
+      setTotpSetupCode('');
+      setTotpDisableCode('');
+      setSecurityMessage(null);
+      setSecurityError(null);
+    }
+  }, [isSecurityModalOpen]);
 
   const withSubmission = async (action: () => Promise<void>) => {
     setIsSubmitting(true);
@@ -646,6 +735,55 @@ const DashboardScreen = () => {
     });
   };
 
+  const handleSetup2FA = async () => {
+    setIsSecuritySubmitting(true);
+    setSecurityError(null);
+    setSecurityMessage(null);
+    try {
+      const result = await setup2FA();
+      setTotpQrCode(result.qrCodeDataUrl);
+      setTotpSecret(result.secret);
+      setSetupStep('scanning');
+    } catch (err) {
+      setSecurityError(extractApiError(err));
+    } finally {
+      setIsSecuritySubmitting(false);
+    }
+  };
+
+  const handleConfirm2FA = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSecuritySubmitting(true);
+    setSecurityError(null);
+    try {
+      await confirm2FA(totpSetupCode);
+      setSecurityMessage('2FA enabled successfully.');
+      setSetupStep('idle');
+      setTotpSetupCode('');
+      setTotpQrCode('');
+      setTotpSecret('');
+    } catch (err) {
+      setSecurityError(extractApiError(err));
+    } finally {
+      setIsSecuritySubmitting(false);
+    }
+  };
+
+  const handleDisable2FA = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSecuritySubmitting(true);
+    setSecurityError(null);
+    try {
+      await disable2FA(totpDisableCode);
+      setSecurityMessage('2FA disabled.');
+      setTotpDisableCode('');
+    } catch (err) {
+      setSecurityError(extractApiError(err));
+    } finally {
+      setIsSecuritySubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[linear-gradient(145deg,#f0f8ff_0%,#fffbf2_45%,#eef7ff_100%)] text-slate-900">
       <header className="sticky top-0 z-20 border-b border-sky-100 bg-white/85 backdrop-blur">
@@ -660,6 +798,13 @@ const DashboardScreen = () => {
               <p className="font-semibold text-slate-800">{user?.email}</p>
               <p>{user?.role}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsSecurityModalOpen(true)}
+              className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-indigo-700 transition hover:bg-indigo-100"
+            >
+              Security
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -826,6 +971,137 @@ const DashboardScreen = () => {
           </article>
         </section>
       </main>
+
+      {isSecurityModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Security settings"
+          onClick={() => setIsSecurityModalOpen(false)}
+        >
+          <section
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_60px_rgba(15,23,42,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-700">Account Security</p>
+                <h2 className="text-xl font-black text-slate-900">Two-Factor Authentication</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSecurityModalOpen(false)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700 transition hover:border-slate-400"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-sm text-slate-700">
+                Status:{' '}
+                {user?.totpEnabled ? (
+                  <span className="font-bold text-emerald-700">Enabled</span>
+                ) : (
+                  <span className="font-bold text-amber-700">Disabled</span>
+                )}
+              </p>
+            </div>
+
+            {securityMessage && (
+              <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{securityMessage}</p>
+            )}
+            {securityError && (
+              <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{securityError}</p>
+            )}
+
+            {!user?.totpEnabled && (
+              <div className="mt-4">
+                {setupStep === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSetup2FA()}
+                    disabled={isSecuritySubmitting}
+                    className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:opacity-60"
+                  >
+                    {isSecuritySubmitting ? 'Generating...' : 'Set Up 2FA'}
+                  </button>
+                )}
+
+                {setupStep === 'scanning' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-slate-600">
+                      Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.), then enter the
+                      6-digit code to confirm.
+                    </p>
+                    <div className="flex justify-center rounded-xl border border-slate-200 bg-white p-3">
+                      <img src={totpQrCode} alt="2FA QR code" className="h-44 w-44" />
+                    </div>
+                    <details className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Show manual key
+                      </summary>
+                      <p className="mt-2 break-all font-mono text-xs text-slate-700">{totpSecret}</p>
+                    </details>
+                    <form className="space-y-3" onSubmit={(e) => void handleConfirm2FA(e)}>
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Confirm code
+                        <input
+                          className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-xl font-mono tracking-[0.4em] outline-none ring-0 transition focus:border-indigo-500"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          value={totpSetupCode}
+                          onChange={(event) => setTotpSetupCode(event.target.value.replace(/\D/g, ''))}
+                          autoFocus
+                          required
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={isSecuritySubmitting || totpSetupCode.length < 6}
+                        className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
+                      >
+                        {isSecuritySubmitting ? 'Enabling...' : 'Enable 2FA'}
+                      </button>
+                    </form>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {user?.totpEnabled && (
+              <form className="mt-4 space-y-3" onSubmit={(e) => void handleDisable2FA(e)}>
+                <p className="text-sm text-slate-600">
+                  To disable 2FA, enter your current authenticator code.
+                </p>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Authenticator Code
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-xl font-mono tracking-[0.4em] outline-none ring-0 transition focus:border-rose-500"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={totpDisableCode}
+                    onChange={(event) => setTotpDisableCode(event.target.value.replace(/\D/g, ''))}
+                    required
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={isSecuritySubmitting || totpDisableCode.length < 6}
+                  className="w-full rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-rose-500 disabled:opacity-60"
+                >
+                  {isSecuritySubmitting ? 'Disabling...' : 'Disable 2FA'}
+                </button>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
 
       {isDefinitionsModalOpen && (
         <div

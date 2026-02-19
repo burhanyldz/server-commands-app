@@ -1,13 +1,19 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, extractApiError, TOKEN_STORAGE_KEY } from './lib/api';
 import type { AuthUser } from './types';
 
 interface AuthContextValue {
   user: AuthUser | null;
   isReady: boolean;
+  twoFactorPending: boolean;
   login: (email: string, password: string) => Promise<void>;
+  completeTotpLogin: (code: string) => Promise<void>;
   bootstrapAdmin: (email: string, password: string, bootstrapToken: string) => Promise<void>;
   logout: () => void;
+  setup2FA: () => Promise<{ secret: string; qrCodeDataUrl: string }>;
+  confirm2FA: (code: string) => Promise<void>;
+  disable2FA: (code: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -25,34 +31,57 @@ const clearAuth = (): void => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!token) {
-      setIsReady(true);
-      return;
-    }
+    void (async () => {
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (!token) {
+        setIsReady(true);
+        return;
+      }
 
-    api
-      .currentUser()
-      .then((response) => {
+      try {
+        const response = await api.currentUser();
         setUser(response.user);
-      })
-      .catch(() => {
+      } catch {
         clearAuth();
         setUser(null);
-      })
-      .finally(() => {
+      } finally {
         setIsReady(true);
-      });
+      }
+    })();
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const response = await api.currentUser();
+    setUser(response.user);
+    const stored = localStorage.getItem('server_commands_user');
+    if (stored) {
+      localStorage.setItem('server_commands_user', JSON.stringify(response.user));
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       isReady,
+      twoFactorPending: challengeToken !== null,
       login: async (email: string, password: string) => {
         const response = await api.login(email, password);
+        if (response.requiresTwoFactor) {
+          setChallengeToken(response.challengeToken);
+          return;
+        }
+        persistAuth(response.token, response.user);
+        setUser(response.user);
+      },
+      completeTotpLogin: async (code: string) => {
+        if (!challengeToken) {
+          throw new Error('No active 2FA challenge.');
+        }
+        const response = await api.completeTotpLogin(challengeToken, code);
+        setChallengeToken(null);
         persistAuth(response.token, response.user);
         setUser(response.user);
       },
@@ -63,10 +92,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       },
       logout: () => {
         clearAuth();
+        setChallengeToken(null);
         setUser(null);
-      }
+      },
+      setup2FA: async () => {
+        return api.setup2FA();
+      },
+      confirm2FA: async (code: string) => {
+        await api.confirm2FA(code);
+        await refreshUser();
+      },
+      disable2FA: async (code: string) => {
+        await api.disable2FA(code);
+        await refreshUser();
+      },
+      refreshUser
     }),
-    [isReady, user]
+    [isReady, user, challengeToken, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

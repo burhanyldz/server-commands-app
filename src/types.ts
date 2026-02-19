@@ -4,6 +4,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: 'admin' | 'operator';
+  totpEnabled: boolean;
 }
 
 export interface DirectoryRecord {
