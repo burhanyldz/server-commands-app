@@ -19,6 +19,8 @@ interface StepDraft {
   timeoutMs: string;
 }
 
+type DefinitionManagementTab = 'directories' | 'commands';
+
 const SHELL_OPTIONS: Array<{ value: CommandShell; label: string }> = [
   { value: 'cmd', label: 'cmd' },
   { value: 'powershell', label: 'PowerShell' },
@@ -120,14 +122,10 @@ const StepBuilder = ({
 }) => {
   const [selectedCommandId, setSelectedCommandId] = useState('');
 
-  useEffect(() => {
-    if (!selectedCommandId && commands.length > 0) {
-      setSelectedCommandId(commands[0]._id);
-    }
-  }, [commands, selectedCommandId]);
+  const effectiveSelectedId = selectedCommandId || (commands.length > 0 ? commands[0]._id : '');
 
   const addSavedCommand = () => {
-    const selected = commands.find((command) => command._id === selectedCommandId);
+    const selected = commands.find((command) => command._id === effectiveSelectedId);
     if (!selected) {
       return;
     }
@@ -180,7 +178,7 @@ const StepBuilder = ({
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <select
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          value={selectedCommandId}
+          value={effectiveSelectedId}
           onChange={(event) => setSelectedCommandId(event.target.value)}
           disabled={commands.length === 0}
         >
@@ -449,6 +447,10 @@ const DashboardScreen = () => {
 
   const [runsPage, setRunsPage] = useState(0);
   const [runsHasMore, setRunsHasMore] = useState(false);
+  const [isDefinitionsModalOpen, setIsDefinitionsModalOpen] = useState(false);
+  const [managementTab, setManagementTab] = useState<DefinitionManagementTab>('directories');
+  const [isAddingDirectory, setIsAddingDirectory] = useState(false);
+  const [isAddingCommand, setIsAddingCommand] = useState(false);
 
   const pageSize = 15;
 
@@ -495,6 +497,7 @@ const DashboardScreen = () => {
 
   useEffect(() => {
     void loadEverything();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -503,7 +506,30 @@ const DashboardScreen = () => {
     }, 15_000);
 
     return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runsPage]);
+
+  useEffect(() => {
+    if (!isDefinitionsModalOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsDefinitionsModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDefinitionsModalOpen]);
+
+  useEffect(() => {
+    if (!isDefinitionsModalOpen) {
+      setIsAddingDirectory(false);
+      setIsAddingCommand(false);
+    }
+  }, [isDefinitionsModalOpen]);
 
   const withSubmission = async (action: () => Promise<void>) => {
     setIsSubmitting(true);
@@ -532,6 +558,7 @@ const DashboardScreen = () => {
       setDirectoryLabel('');
       setDirectoryPath('');
       setDirectoryDescription('');
+      setIsAddingDirectory(false);
       setMessage('Directory saved.');
       await loadEverything();
     });
@@ -554,6 +581,7 @@ const DashboardScreen = () => {
       setCommandShell('cmd');
       setCommandRunAsSystem(true);
       setCommandTimeout('');
+      setIsAddingCommand(false);
       setMessage('Command saved.');
       await loadEverything();
     });
@@ -634,6 +662,16 @@ const DashboardScreen = () => {
             </div>
             <button
               type="button"
+              onClick={() => {
+                setManagementTab('directories');
+                setIsDefinitionsModalOpen(true);
+              }}
+              className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-violet-700 transition hover:bg-violet-100"
+            >
+              Manage Definitions
+            </button>
+            <button
+              type="button"
               onClick={() => void loadEverything()}
               className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100"
             >
@@ -654,135 +692,6 @@ const DashboardScreen = () => {
         <section className="space-y-4">
           {message && <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{message}</p>}
           {error && <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>}
-
-          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,53,84,0.12)]">
-            <h2 className="text-lg font-black">Directories</h2>
-
-            <form className="mt-3 grid gap-2" onSubmit={handleCreateDirectory}>
-              <input
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Directory label"
-                value={directoryLabel}
-                onChange={(event) => setDirectoryLabel(event.target.value)}
-                required
-              />
-              <input
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Path e.g. C:\\inetpub\\vhosts\\..."
-                value={directoryPath}
-                onChange={(event) => setDirectoryPath(event.target.value)}
-                required
-              />
-              <input
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Description (optional)"
-                value={directoryDescription}
-                onChange={(event) => setDirectoryDescription(event.target.value)}
-              />
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 disabled:opacity-60"
-              >
-                Save Directory
-              </button>
-            </form>
-
-            <div className="mt-3 space-y-2">
-              {directories.map((directory) => (
-                <div key={directory._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-sm font-bold text-slate-900">{directory.label}</p>
-                  <p className="mt-1 break-all font-mono text-xs text-slate-600">{directory.path}</p>
-                  {directory.description && <p className="mt-1 text-xs text-slate-500">{directory.description}</p>}
-                  <div className="mt-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteDirectory(directory._id)}
-                      className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,53,84,0.12)]">
-            <h2 className="text-lg font-black">Commands</h2>
-
-            <form className="mt-3 grid gap-2" onSubmit={handleCreateCommand}>
-              <input
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Label e.g. Değişiklikleri çek"
-                value={commandLabel}
-                onChange={(event) => setCommandLabel(event.target.value)}
-                required
-              />
-              <textarea
-                className="min-h-[64px] rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                placeholder="Command e.g. git pull"
-                value={commandText}
-                onChange={(event) => setCommandText(event.target.value)}
-                required
-              />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <select
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={commandShell}
-                  onChange={(event) => setCommandShell(event.target.value as CommandShell)}
-                >
-                  {SHELL_OPTIONS.map((shell) => (
-                    <option key={shell.value} value={shell.value}>
-                      {shell.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  placeholder="Timeout ms (optional)"
-                  value={commandTimeout}
-                  onChange={(event) => setCommandTimeout(event.target.value)}
-                />
-              </div>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={commandRunAsSystem}
-                  onChange={(event) => setCommandRunAsSystem(event.target.checked)}
-                />
-                Run as NT AUTHORITY\\SYSTEM
-              </label>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 disabled:opacity-60"
-              >
-                Save Command
-              </button>
-            </form>
-
-            <div className="mt-3 space-y-2">
-              {commands.map((command) => (
-                <div key={command._id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-sm font-bold text-slate-900">{command.label}</p>
-                  <p className="mt-1 break-all font-mono text-xs text-slate-600">{command.command}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    shell: {command.shell} | runAsSystem: {String(command.runAsSystem)}
-                  </p>
-                  <div className="mt-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteCommand(command._id)}
-                      className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
 
           <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_28px_rgba(15,53,84,0.12)]">
             <h2 className="text-lg font-black">Queue Ad-hoc Command Run</h2>
@@ -917,6 +826,233 @@ const DashboardScreen = () => {
           </article>
         </section>
       </main>
+
+      {isDefinitionsModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Definition manager"
+          onClick={() => setIsDefinitionsModalOpen(false)}
+        >
+          <section
+            className="w-full max-w-4xl rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_25px_60px_rgba(15,23,42,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-700">Definition Manager</p>
+                <h2 className="text-xl font-black text-slate-900">Add or Delete Saved Definitions</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDefinitionsModalOpen(false)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700 transition hover:border-slate-400"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setManagementTab('directories');
+                  setIsAddingCommand(false);
+                }}
+                className={`rounded-lg border px-3 py-2 text-xs font-bold uppercase tracking-wide transition ${
+                  managementTab === 'directories'
+                    ? 'border-sky-300 bg-sky-100 text-sky-800'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Directories
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setManagementTab('commands');
+                  setIsAddingDirectory(false);
+                }}
+                className={`rounded-lg border px-3 py-2 text-xs font-bold uppercase tracking-wide transition ${
+                  managementTab === 'commands'
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Commands
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[70vh] overflow-y-auto pr-1">
+              {managementTab === 'directories' && (
+                <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-black uppercase tracking-wide text-slate-700">Directories</h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingDirectory((value) => !value)}
+                      className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-sky-700 transition hover:bg-sky-100"
+                    >
+                      {isAddingDirectory ? 'Close Form' : 'Add New'}
+                    </button>
+                  </div>
+
+                  {isAddingDirectory && (
+                    <form className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-3" onSubmit={handleCreateDirectory}>
+                      <input
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        placeholder="Directory label"
+                        value={directoryLabel}
+                        onChange={(event) => setDirectoryLabel(event.target.value)}
+                        required
+                      />
+                      <input
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        placeholder="Path e.g. C:\\inetpub\\vhosts\\..."
+                        value={directoryPath}
+                        onChange={(event) => setDirectoryPath(event.target.value)}
+                        required
+                      />
+                      <input
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        placeholder="Description (optional)"
+                        value={directoryDescription}
+                        onChange={(event) => setDirectoryDescription(event.target.value)}
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 disabled:opacity-60"
+                      >
+                        Save Directory
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="mt-3 space-y-2">
+                    {directories.length === 0 && (
+                      <p className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
+                        No directories saved yet.
+                      </p>
+                    )}
+                    {directories.map((directory) => (
+                      <div key={directory._id} className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-bold text-slate-900">{directory.label}</p>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteDirectory(directory._id)}
+                            className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        <p className="mt-1 break-all font-mono text-xs text-slate-600">{directory.path}</p>
+                        {directory.description && <p className="mt-1 text-xs text-slate-500">{directory.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              )}
+
+              {managementTab === 'commands' && (
+                <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-black uppercase tracking-wide text-slate-700">Commands</h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCommand((value) => !value)}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-emerald-700 transition hover:bg-emerald-100"
+                    >
+                      {isAddingCommand ? 'Close Form' : 'Add New'}
+                    </button>
+                  </div>
+
+                  {isAddingCommand && (
+                    <form className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-3" onSubmit={handleCreateCommand}>
+                      <input
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        placeholder="Label e.g. Pull changes"
+                        value={commandLabel}
+                        onChange={(event) => setCommandLabel(event.target.value)}
+                        required
+                      />
+                      <textarea
+                        className="min-h-[64px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        placeholder="Command e.g. git pull"
+                        value={commandText}
+                        onChange={(event) => setCommandText(event.target.value)}
+                        required
+                      />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <select
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                          value={commandShell}
+                          onChange={(event) => setCommandShell(event.target.value as CommandShell)}
+                        >
+                          {SHELL_OPTIONS.map((shell) => (
+                            <option key={shell.value} value={shell.value}>
+                              {shell.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                          placeholder="Timeout ms (optional)"
+                          value={commandTimeout}
+                          onChange={(event) => setCommandTimeout(event.target.value)}
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={commandRunAsSystem}
+                          onChange={(event) => setCommandRunAsSystem(event.target.checked)}
+                        />
+                        Run as NT AUTHORITY\\SYSTEM
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-sky-500 disabled:opacity-60"
+                      >
+                        Save Command
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="mt-3 space-y-2">
+                    {commands.length === 0 && (
+                      <p className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
+                        No commands saved yet.
+                      </p>
+                    )}
+                    {commands.map((command) => (
+                      <div key={command._id} className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-bold text-slate-900">{command.label}</p>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteCommand(command._id)}
+                            className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        <p className="mt-1 break-all font-mono text-xs text-slate-600">{command.command}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          shell: {command.shell} | runAsSystem: {String(command.runAsSystem)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
