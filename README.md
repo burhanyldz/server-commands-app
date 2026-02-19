@@ -20,6 +20,25 @@ Standalone React admin app for managing directories, command definitions, and ad
    npm run dev
    ```
 
+## IIS deployment under subpath
+
+If this app is served from `https://yourdomain.comx/server-commands/`, set:
+
+```env
+VITE_APP_BASE_PATH=/server-commands/
+VITE_API_BASE_URL=https://<your-api-host>
+```
+
+Then build:
+
+```bash
+npm run build
+```
+
+Important:
+- `VITE_APP_BASE_PATH` must include both leading and trailing `/`.
+- `VITE_API_BASE_URL` must be your reachable production API base URL (not localhost).
+
 ## Features
 
 - Dedicated auth flow (login + first-admin bootstrap)
