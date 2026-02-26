@@ -54,6 +54,15 @@ const createStepFromCommand = (command: CommandRecord): StepDraft => ({
   timeoutMs: command.timeoutMs ? String(command.timeoutMs) : ''
 });
 
+const createStepFromRun = (step: CommandRun['steps'][number]): StepDraft => ({
+  id: createDraftId(),
+  label: step.label,
+  command: step.command,
+  shell: step.shell,
+  runAsSystem: step.runAsSystem,
+  timeoutMs: step.timeoutMs ? String(step.timeoutMs) : ''
+});
+
 const formatDate = (value?: string): string => {
   if (!value) {
     return '-';
@@ -703,6 +712,14 @@ const DashboardScreen = () => {
     });
   };
 
+  const handleClearRunForm = () => {
+    setRunName('');
+    setRunDirectoryId(directories[0]?._id ?? '');
+    setRunSteps([]);
+    setError(null);
+    setMessage('Ad-hoc run form cleared.');
+  };
+
   const handleDeleteDirectory = async (id: string) => {
     await withSubmission(async () => {
       await api.deleteDirectory(id);
@@ -725,6 +742,30 @@ const DashboardScreen = () => {
       setMessage('Retry queued.');
       await loadRuns(true);
     });
+  };
+
+  const handleReuseRun = (run: CommandRun) => {
+    const directoryExists = directories.some((directory) => directory._id === run.directoryId);
+    const fallbackDirectoryId = directories[0]?._id ?? '';
+
+    setRunName(run.name || run.templateName || '');
+    setRunDirectoryId(directoryExists ? run.directoryId : fallbackDirectoryId);
+    setRunSteps(
+      run.steps
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((step) => createStepFromRun(step))
+    );
+
+    if (directoryExists) {
+      setError(null);
+      setMessage('Run loaded into ad-hoc form. You can edit and queue it.');
+    } else {
+      setError('Original run directory no longer exists. Select a directory before queueing.');
+      setMessage('Run loaded into ad-hoc form with the closest available settings.');
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteRun = async (id: string) => {
@@ -868,13 +909,23 @@ const DashboardScreen = () => {
                 setSteps={setRunSteps}
               />
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
-              >
-                Queue Ad-hoc Run
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={handleClearRunForm}
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+                >
+                  Clear Form
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
+                >
+                  Queue Ad-hoc Run
+                </button>
+              </div>
             </form>
           </article>
         </section>
@@ -942,7 +993,16 @@ const DashboardScreen = () => {
                   <div className="mt-3 flex items-center justify-end gap-2">
                     <button
                       type="button"
+                      onClick={() => handleReuseRun(run)}
+                      disabled={isSubmitting}
+                      className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-sky-700 disabled:opacity-60"
+                    >
+                      REUSE
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => void handleRetryRun(run._id)}
+                      disabled={isSubmitting}
                       className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700"
                     >
                       RERUN
