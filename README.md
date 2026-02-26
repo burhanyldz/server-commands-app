@@ -19,6 +19,15 @@ Standalone React admin app for managing directories, command definitions, and ad
    ```bash
    npm run dev
    ```
+4. Create `.env.production.local` (gitignored) for local production-API testing:
+   ```env
+   VITE_API_BASE_URL=https://yourdomain.comx/server-commands-api
+   VITE_APP_BASE_PATH=/
+   ```
+5. Run local app against production API:
+   ```bash
+   npm run prod
+   ```
 
 ## IIS deployment under subpath
 

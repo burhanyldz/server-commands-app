@@ -945,7 +945,7 @@ const DashboardScreen = () => {
                       onClick={() => void handleRetryRun(run._id)}
                       className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700"
                     >
-                      Retry
+                      RERUN
                     </button>
                     <button
                       type="button"
