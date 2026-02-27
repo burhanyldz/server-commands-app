@@ -1,4 +1,5 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
+import { startRegistration } from '@simplewebauthn/browser';
 import { formatAuthError, useAuth } from './auth';
 import { api, extractApiError } from './lib/api';
 import type {
@@ -6,7 +7,8 @@ import type {
   CommandRun,
   CommandShell,
   CommandStepInput,
-  DirectoryRecord
+  DirectoryRecord,
+  PasskeyRecord
 } from './types';
 
 interface StepDraft {
@@ -315,7 +317,7 @@ const StepBuilder = ({
 };
 
 const LoginScreen = () => {
-  const { login, bootstrapAdmin, twoFactorPending, completeTotpLogin, logout } = useAuth();
+  const { login, loginWithPasskey, bootstrapAdmin, twoFactorPending, completeTotpLogin, logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [bootstrapToken, setBootstrapToken] = useState('');
@@ -360,6 +362,22 @@ const LoginScreen = () => {
 
     try {
       await bootstrapAdmin(email, password, bootstrapToken);
+    } catch (err) {
+      setError(formatAuthError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    if (!email) {
+      setError('Enter your email address first, then click Sign in with Passkey.');
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await loginWithPasskey(email);
     } catch (err) {
       setError(formatAuthError(err));
     } finally {
@@ -460,6 +478,21 @@ const LoginScreen = () => {
           </button>
         </form>
 
+        <div className="my-4 flex items-center gap-2">
+          <hr className="flex-1 border-slate-200" />
+          <span className="text-xs font-medium text-slate-400">or use passkey</span>
+          <hr className="flex-1 border-slate-200" />
+        </div>
+
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={() => void handlePasskeyLogin()}
+          className="w-full rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting ? 'Verifying…' : 'Sign in with Touch ID / Passkey'}
+        </button>
+
         <button
           type="button"
           className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-sky-700"
@@ -536,6 +569,11 @@ const DashboardScreen = () => {
   const [securityMessage, setSecurityMessage] = useState<string | null>(null);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [isSecuritySubmitting, setIsSecuritySubmitting] = useState(false);
+
+  // Passkeys state
+  const [passkeys, setPasskeys] = useState<PasskeyRecord[]>([]);
+  const [newPasskeyName, setNewPasskeyName] = useState('');
+  const [isLoadingPasskeys, setIsLoadingPasskeys] = useState(false);
 
   const pageSize = 15;
 
@@ -626,7 +664,15 @@ const DashboardScreen = () => {
       setTotpDisableCode('');
       setSecurityMessage(null);
       setSecurityError(null);
+      setNewPasskeyName('');
+      return;
     }
+    // Load passkeys when modal opens
+    setIsLoadingPasskeys(true);
+    void api.listPasskeys()
+      .then(setPasskeys)
+      .catch(() => setPasskeys([]))
+      .finally(() => setIsLoadingPasskeys(false));
   }, [isSecurityModalOpen]);
 
   const withSubmission = async (action: () => Promise<void>) => {
@@ -818,6 +864,40 @@ const DashboardScreen = () => {
       await disable2FA(totpDisableCode);
       setSecurityMessage('2FA disabled.');
       setTotpDisableCode('');
+    } catch (err) {
+      setSecurityError(extractApiError(err));
+    } finally {
+      setIsSecuritySubmitting(false);
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    setIsSecuritySubmitting(true);
+    setSecurityError(null);
+    setSecurityMessage(null);
+    try {
+      const { options, challengeToken } = await api.passkeyRegisterOptions();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const registrationResponse = await startRegistration({ optionsJSON: options as any });
+      await api.passkeyRegisterVerify(challengeToken, registrationResponse, newPasskeyName.trim() || undefined);
+      setSecurityMessage('Passkey registered successfully.');
+      setNewPasskeyName('');
+      setPasskeys(await api.listPasskeys());
+    } catch (err) {
+      setSecurityError(extractApiError(err));
+    } finally {
+      setIsSecuritySubmitting(false);
+    }
+  };
+
+  const handleDeletePasskey = async (credentialId: string) => {
+    setIsSecuritySubmitting(true);
+    setSecurityError(null);
+    setSecurityMessage(null);
+    try {
+      await api.deletePasskey(credentialId);
+      setPasskeys((prev) => prev.filter((pk) => pk.id !== credentialId));
+      setSecurityMessage('Passkey removed.');
     } catch (err) {
       setSecurityError(extractApiError(err));
     } finally {
@@ -1041,13 +1121,13 @@ const DashboardScreen = () => {
           onClick={() => setIsSecurityModalOpen(false)}
         >
           <section
-            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_60px_rgba(15,23,42,0.35)]"
+            className="w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_25px_60px_rgba(15,23,42,0.35)] max-h-[90vh]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-700">Account Security</p>
-                <h2 className="text-xl font-black text-slate-900">Two-Factor Authentication</h2>
+                <h2 className="text-xl font-black text-slate-900">Security Settings</h2>
               </div>
               <button
                 type="button"
@@ -1059,7 +1139,8 @@ const DashboardScreen = () => {
             </div>
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-sm text-slate-700">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Authenticator App (TOTP)</p>
+              <p className="mt-0.5 text-sm text-slate-700">
                 Status:{' '}
                 {user?.totpEnabled ? (
                   <span className="font-bold text-emerald-700">Enabled</span>
@@ -1159,6 +1240,68 @@ const DashboardScreen = () => {
                 </button>
               </form>
             )}
+
+            {/* ── Passkeys section ────────────────────────────────── */}
+            <div className="mt-6">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-700">Passkeys</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Sign in instantly with Touch ID, Face ID, or your device's iCloud Keychain — no authenticator app needed.
+              </p>
+
+              {isLoadingPasskeys ? (
+                <p className="mt-3 text-xs text-slate-400">Loading passkeys…</p>
+              ) : passkeys.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {passkeys.map((pk) => (
+                    <li
+                      key={pk.id}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-800">{pk.name}</p>
+                        <p className="text-xs text-slate-500">
+                          {pk.deviceType === 'multiDevice' ? 'Synced (iCloud / cross-device)' : 'This device only'}
+                          {pk.backedUp ? ' · backed up' : ''}
+                          {' · added '}
+                          {new Date(pk.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isSecuritySubmitting}
+                        onClick={() => void handleDeletePasskey(pk.id)}
+                        className="shrink-0 rounded-lg border border-rose-200 bg-white px-2 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  No passkeys registered yet.
+                </p>
+              )}
+
+              <div className="mt-3 flex gap-2">
+                <input
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-violet-400"
+                  type="text"
+                  placeholder="Passkey name (optional)"
+                  value={newPasskeyName}
+                  onChange={(e) => setNewPasskeyName(e.target.value)}
+                  maxLength={64}
+                />
+                <button
+                  type="button"
+                  disabled={isSecuritySubmitting}
+                  onClick={() => void handleRegisterPasskey()}
+                  className="shrink-0 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSecuritySubmitting ? 'Registering…' : 'Add Passkey'}
+                </button>
+              </div>
+            </div>
           </section>
         </div>
       )}

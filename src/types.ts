@@ -7,6 +7,14 @@ export interface AuthUser {
   totpEnabled: boolean;
 }
 
+export interface PasskeyRecord {
+  id: string;
+  name: string;
+  deviceType: string;
+  backedUp: boolean;
+  createdAt: string;
+}
+
 export interface DirectoryRecord {
   _id: string;
   label: string;

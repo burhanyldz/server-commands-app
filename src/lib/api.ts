@@ -5,7 +5,8 @@ import type {
   CommandRecord,
   CommandRun,
   CommandStepInput,
-  DirectoryRecord
+  DirectoryRecord,
+  PasskeyRecord
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5100';
@@ -169,5 +170,35 @@ export const api = {
 
   async disable2FA(code: string): Promise<void> {
     await client.post('/api/auth/2fa/disable', { code });
+  },
+
+  // ── Passkey ──────────────────────────────────────────────────────────────
+
+  async passkeyLoginOptions(email: string): Promise<{ options: Record<string, unknown>; challengeToken: string }> {
+    const response = await client.post('/api/auth/passkey/login-options', { email });
+    return response.data;
+  },
+
+  async passkeyLoginVerify(challengeToken: string, authenticationResponse: unknown): Promise<{ token: string; user: AuthUser }> {
+    const response = await client.post('/api/auth/passkey/login-verify', { challengeToken, authenticationResponse });
+    return response.data;
+  },
+
+  async passkeyRegisterOptions(): Promise<{ options: Record<string, unknown>; challengeToken: string }> {
+    const response = await client.get('/api/auth/passkey/register-options');
+    return response.data;
+  },
+
+  async passkeyRegisterVerify(challengeToken: string, registrationResponse: unknown, passkeyName?: string): Promise<void> {
+    await client.post('/api/auth/passkey/register-verify', { challengeToken, registrationResponse, passkeyName });
+  },
+
+  async listPasskeys(): Promise<PasskeyRecord[]> {
+    const response = await client.get('/api/auth/passkey/list');
+    return response.data.passkeys;
+  },
+
+  async deletePasskey(credentialId: string): Promise<void> {
+    await client.delete(`/api/auth/passkey/${encodeURIComponent(credentialId)}`);
   }
 };

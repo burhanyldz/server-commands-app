@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { api, extractApiError, TOKEN_STORAGE_KEY } from './lib/api';
 import type { AuthUser } from './types';
 
@@ -7,6 +8,7 @@ interface AuthContextValue {
   isReady: boolean;
   twoFactorPending: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithPasskey: (email: string) => Promise<void>;
   completeTotpLogin: (code: string) => Promise<void>;
   bootstrapAdmin: (email: string, password: string, bootstrapToken: string) => Promise<void>;
   logout: () => void;
@@ -73,6 +75,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setChallengeToken(response.challengeToken);
           return;
         }
+        persistAuth(response.token, response.user);
+        setUser(response.user);
+      },
+      loginWithPasskey: async (email: string) => {
+        const { options, challengeToken: ct } = await api.passkeyLoginOptions(email);
+        // Opens native macOS Touch ID / iCloud Keychain dialog
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const authResponse = await startAuthentication({ optionsJSON: options as any });
+        const response = await api.passkeyLoginVerify(ct, authResponse);
         persistAuth(response.token, response.user);
         setUser(response.user);
       },
