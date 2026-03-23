@@ -560,6 +560,18 @@ const DashboardScreen = () => {
   const [isAddingDirectory, setIsAddingDirectory] = useState(false);
   const [isAddingCommand, setIsAddingCommand] = useState(false);
 
+  const [editingDirectoryId, setEditingDirectoryId] = useState<string | null>(null);
+  const [editDirectoryLabel, setEditDirectoryLabel] = useState('');
+  const [editDirectoryPath, setEditDirectoryPath] = useState('');
+  const [editDirectoryDescription, setEditDirectoryDescription] = useState('');
+
+  const [editingCommandId, setEditingCommandId] = useState<string | null>(null);
+  const [editCommandLabel, setEditCommandLabel] = useState('');
+  const [editCommandText, setEditCommandText] = useState('');
+  const [editCommandShell, setEditCommandShell] = useState<CommandShell>('cmd');
+  const [editCommandRunAsSystem, setEditCommandRunAsSystem] = useState(true);
+  const [editCommandTimeout, setEditCommandTimeout] = useState('');
+
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [totpQrCode, setTotpQrCode] = useState('');
   const [totpSecret, setTotpSecret] = useState('');
@@ -652,6 +664,8 @@ const DashboardScreen = () => {
     if (!isDefinitionsModalOpen) {
       setIsAddingDirectory(false);
       setIsAddingCommand(false);
+      setEditingDirectoryId(null);
+      setEditingCommandId(null);
     }
   }, [isDefinitionsModalOpen]);
 
@@ -727,6 +741,74 @@ const DashboardScreen = () => {
       setCommandTimeout('');
       setIsAddingCommand(false);
       setMessage('Command saved.');
+      await loadEverything();
+    });
+  };
+
+  const startEditingDirectory = (directory: DirectoryRecord) => {
+    setEditingDirectoryId(directory._id);
+    setEditDirectoryLabel(directory.label);
+    setEditDirectoryPath(directory.path);
+    setEditDirectoryDescription(directory.description ?? '');
+  };
+
+  const cancelEditingDirectory = () => {
+    setEditingDirectoryId(null);
+    setEditDirectoryLabel('');
+    setEditDirectoryPath('');
+    setEditDirectoryDescription('');
+  };
+
+  const handleUpdateDirectory = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingDirectoryId) return;
+
+    await withSubmission(async () => {
+      await api.updateDirectory(editingDirectoryId, {
+        label: editDirectoryLabel,
+        path: editDirectoryPath,
+        description: editDirectoryDescription || undefined
+      });
+
+      cancelEditingDirectory();
+      setMessage('Directory updated.');
+      await loadEverything();
+    });
+  };
+
+  const startEditingCommand = (command: CommandRecord) => {
+    setEditingCommandId(command._id);
+    setEditCommandLabel(command.label);
+    setEditCommandText(command.command);
+    setEditCommandShell(command.shell);
+    setEditCommandRunAsSystem(command.runAsSystem);
+    setEditCommandTimeout(command.timeoutMs ? String(command.timeoutMs) : '');
+  };
+
+  const cancelEditingCommand = () => {
+    setEditingCommandId(null);
+    setEditCommandLabel('');
+    setEditCommandText('');
+    setEditCommandShell('cmd');
+    setEditCommandRunAsSystem(true);
+    setEditCommandTimeout('');
+  };
+
+  const handleUpdateCommand = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingCommandId) return;
+
+    await withSubmission(async () => {
+      await api.updateCommand(editingCommandId, {
+        label: editCommandLabel,
+        command: editCommandText,
+        shell: editCommandShell,
+        runAsSystem: editCommandRunAsSystem,
+        timeoutMs: editCommandTimeout.trim() ? Number(editCommandTimeout.trim()) : undefined
+      });
+
+      cancelEditingCommand();
+      setMessage('Command updated.');
       await loadEverything();
     });
   };
@@ -1321,7 +1403,7 @@ const DashboardScreen = () => {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-700">Definition Manager</p>
-                <h2 className="text-xl font-black text-slate-900">Add or Delete Saved Definitions</h2>
+                <h2 className="text-xl font-black text-slate-900">Manage Saved Definitions</h2>
               </div>
               <button
                 type="button"
@@ -1417,18 +1499,70 @@ const DashboardScreen = () => {
                     )}
                     {directories.map((directory) => (
                       <div key={directory._id} className="rounded-xl border border-slate-200 bg-white p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-bold text-slate-900">{directory.label}</p>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteDirectory(directory._id)}
-                            className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                        <p className="mt-1 break-all font-mono text-xs text-slate-600">{directory.path}</p>
-                        {directory.description && <p className="mt-1 text-xs text-slate-500">{directory.description}</p>}
+                        {editingDirectoryId === directory._id ? (
+                          <form className="grid gap-2" onSubmit={handleUpdateDirectory}>
+                            <input
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              placeholder="Directory label"
+                              value={editDirectoryLabel}
+                              onChange={(event) => setEditDirectoryLabel(event.target.value)}
+                              required
+                            />
+                            <input
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              placeholder="Path e.g. C:\\inetpub\\vhosts\\..."
+                              value={editDirectoryPath}
+                              onChange={(event) => setEditDirectoryPath(event.target.value)}
+                              required
+                            />
+                            <input
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              placeholder="Description (optional)"
+                              value={editDirectoryDescription}
+                              onChange={(event) => setEditDirectoryDescription(event.target.value)}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-500 disabled:opacity-60"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingDirectory}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-slate-400"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-bold text-slate-900">{directory.label}</p>
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingDirectory(directory)}
+                                  className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-sky-700"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDeleteDirectory(directory._id)}
+                                  className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <p className="mt-1 break-all font-mono text-xs text-slate-600">{directory.path}</p>
+                            {directory.description && <p className="mt-1 text-xs text-slate-500">{directory.description}</p>}
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1509,20 +1643,93 @@ const DashboardScreen = () => {
                     )}
                     {commands.map((command) => (
                       <div key={command._id} className="rounded-xl border border-slate-200 bg-white p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-bold text-slate-900">{command.label}</p>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteCommand(command._id)}
-                            className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                        <p className="mt-1 break-all font-mono text-xs text-slate-600">{command.command}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          shell: {command.shell} | runAsSystem: {String(command.runAsSystem)}
-                        </p>
+                        {editingCommandId === command._id ? (
+                          <form className="grid gap-2" onSubmit={handleUpdateCommand}>
+                            <input
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              placeholder="Label e.g. Pull changes"
+                              value={editCommandLabel}
+                              onChange={(event) => setEditCommandLabel(event.target.value)}
+                              required
+                            />
+                            <textarea
+                              className="min-h-[64px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                              placeholder="Command e.g. git pull"
+                              value={editCommandText}
+                              onChange={(event) => setEditCommandText(event.target.value)}
+                              required
+                            />
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <select
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                value={editCommandShell}
+                                onChange={(event) => setEditCommandShell(event.target.value as CommandShell)}
+                              >
+                                {SHELL_OPTIONS.map((shell) => (
+                                  <option key={shell.value} value={shell.value}>
+                                    {shell.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                                placeholder="Timeout ms (optional)"
+                                value={editCommandTimeout}
+                                onChange={(event) => setEditCommandTimeout(event.target.value)}
+                              />
+                            </div>
+                            <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={editCommandRunAsSystem}
+                                onChange={(event) => setEditCommandRunAsSystem(event.target.checked)}
+                              />
+                              Run as NT AUTHORITY\SYSTEM
+                            </label>
+                            <div className="flex gap-2">
+                              <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-500 disabled:opacity-60"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingCommand}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-slate-400"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-bold text-slate-900">{command.label}</p>
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingCommand(command)}
+                                  className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-sky-700"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDeleteCommand(command._id)}
+                                  className="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-700"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <p className="mt-1 break-all font-mono text-xs text-slate-600">{command.command}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              shell: {command.shell} | runAsSystem: {String(command.runAsSystem)}
+                            </p>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

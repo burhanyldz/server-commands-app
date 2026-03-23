@@ -88,6 +88,15 @@ export const api = {
     return response.data;
   },
 
+  async updateDirectory(id: string, payload: {
+    label?: string;
+    path?: string;
+    description?: string;
+  }): Promise<DirectoryRecord> {
+    const response = await client.put(`/api/directories/${encodeURIComponent(id)}`, payload);
+    return response.data;
+  },
+
   async deleteDirectory(id: string): Promise<void> {
     await client.delete(`/api/directories/${id}`);
   },
@@ -106,6 +115,18 @@ export const api = {
     enabled?: boolean;
   }): Promise<CommandRecord> {
     const response = await client.post('/api/commands', payload);
+    return response.data;
+  },
+
+  async updateCommand(id: string, payload: {
+    label?: string;
+    command?: string;
+    shell?: 'cmd' | 'powershell' | 'bash';
+    runAsSystem?: boolean;
+    timeoutMs?: number;
+    enabled?: boolean;
+  }): Promise<CommandRecord> {
+    const response = await client.put(`/api/commands/${encodeURIComponent(id)}`, payload);
     return response.data;
   },
 
