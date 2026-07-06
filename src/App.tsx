@@ -387,8 +387,8 @@ const LoginScreen = () => {
 
   if (twoFactorPending) {
     return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,173,96,0.35),_transparent_35%),radial-gradient(circle_at_85%_20%,_rgba(39,159,191,0.28),_transparent_30%),linear-gradient(160deg,#f8fcff_0%,#fffaf2_65%,#f6fbff_100%)]" />
+      <main className="theme-scope theme-auth-shell relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+        <div className="theme-auth-backdrop absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,173,96,0.35),_transparent_35%),radial-gradient(circle_at_85%_20%,_rgba(39,159,191,0.28),_transparent_30%),linear-gradient(160deg,#f8fcff_0%,#fffaf2_65%,#f6fbff_100%)]" />
         <section className="w-full max-w-md rounded-3xl border border-sky-100 bg-white/90 p-8 shadow-[0_20px_55px_rgba(31,111,138,0.18)] backdrop-blur animate-[fadeIn_0.5s_ease]">
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-sky-600">Server Commands</p>
           <h1 className="mb-1 text-3xl font-black text-slate-900">Two-Factor Auth</h1>
@@ -436,8 +436,8 @@ const LoginScreen = () => {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,173,96,0.35),_transparent_35%),radial-gradient(circle_at_85%_20%,_rgba(39,159,191,0.28),_transparent_30%),linear-gradient(160deg,#f8fcff_0%,#fffaf2_65%,#f6fbff_100%)]" />
+    <main className="theme-scope theme-auth-shell relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+      <div className="theme-auth-backdrop absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,_rgba(255,173,96,0.35),_transparent_35%),radial-gradient(circle_at_85%_20%,_rgba(39,159,191,0.28),_transparent_30%),linear-gradient(160deg,#f8fcff_0%,#fffaf2_65%,#f6fbff_100%)]" />
       <section className="w-full max-w-md rounded-3xl border border-sky-100 bg-white/90 p-8 shadow-[0_20px_55px_rgba(31,111,138,0.18)] backdrop-blur animate-[fadeIn_0.5s_ease]">
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-sky-600">Server Commands</p>
         <h1 className="mb-1 text-3xl font-black text-slate-900">Control Panel</h1>
@@ -988,7 +988,7 @@ const DashboardScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(145deg,#f0f8ff_0%,#fffbf2_45%,#eef7ff_100%)] text-slate-900">
+    <div className="theme-scope theme-dashboard-shell min-h-screen bg-[linear-gradient(145deg,#f0f8ff_0%,#fffbf2_45%,#eef7ff_100%)] text-slate-900">
       <header className="sticky top-0 z-20 border-b border-sky-100 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
@@ -1748,7 +1748,7 @@ const App = () => {
 
   if (!isReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div className="theme-scope theme-loading-shell flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="rounded-xl bg-white px-5 py-4 text-sm font-semibold text-slate-600 shadow">
           Loading authentication state...
         </div>

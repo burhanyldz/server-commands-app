@@ -7,6 +7,8 @@
 :root {
   font-family: 'Manrope', 'Segoe UI', Tahoma, sans-serif;
   color: #0f172a;
+  color-scheme: light;
+  background-color: #f8fafc;
   line-height: 1.5;
   font-weight: 500;
   text-rendering: geometricPrecision;
@@ -21,6 +23,12 @@
 body {
   margin: 0;
   min-width: 320px;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+#root {
+  min-height: 100vh;
 }
 
 pre,
@@ -50,5 +58,258 @@ code,
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #e2e8f0;
+    color-scheme: dark;
+    background-color: #020617;
+  }
+
+  body {
+    background-color: #020617;
+    color: #e2e8f0;
+  }
+
+  .theme-auth-shell,
+  .theme-dashboard-shell,
+  .theme-loading-shell {
+    color: #e2e8f0;
+  }
+
+  .theme-auth-backdrop {
+    background: radial-gradient(circle at top left, rgba(251, 146, 60, 0.18), transparent 34%),
+      radial-gradient(circle at 85% 20%, rgba(56, 189, 248, 0.16), transparent 28%),
+      linear-gradient(160deg, #020617 0%, #111827 62%, #0f172a 100%) !important;
+  }
+
+  .theme-dashboard-shell {
+    background: linear-gradient(145deg, #020617 0%, #111827 48%, #0f172a 100%) !important;
+  }
+
+  .theme-loading-shell {
+    background-color: #0f172a !important;
+  }
+
+  .theme-scope .bg-white {
+    background-color: #0f172a;
+  }
+
+  .theme-scope .bg-white\/90 {
+    background-color: rgba(15, 23, 42, 0.88);
+  }
+
+  .theme-scope .bg-white\/85 {
+    background-color: rgba(15, 23, 42, 0.84);
+  }
+
+  .theme-scope .bg-slate-50 {
+    background-color: #111827;
+  }
+
+  .theme-scope .bg-sky-50 {
+    background-color: rgba(12, 74, 110, 0.34);
+  }
+
+  .theme-scope .bg-sky-100 {
+    background-color: rgba(12, 74, 110, 0.52);
+  }
+
+  .theme-scope .bg-emerald-50 {
+    background-color: rgba(6, 78, 59, 0.28);
+  }
+
+  .theme-scope .bg-emerald-100 {
+    background-color: rgba(6, 95, 70, 0.42);
+  }
+
+  .theme-scope .bg-rose-50 {
+    background-color: rgba(76, 5, 25, 0.3);
+  }
+
+  .theme-scope .bg-amber-50 {
+    background-color: rgba(120, 53, 15, 0.3);
+  }
+
+  .theme-scope .bg-amber-100 {
+    background-color: rgba(146, 64, 14, 0.42);
+  }
+
+  .theme-scope .bg-violet-50 {
+    background-color: rgba(76, 29, 149, 0.28);
+  }
+
+  .theme-scope .bg-indigo-50 {
+    background-color: rgba(49, 46, 129, 0.28);
+  }
+
+  .theme-scope .bg-slate-900 {
+    background-color: #020617;
+  }
+
+  .theme-scope .bg-slate-950\/45 {
+    background-color: rgba(2, 6, 23, 0.72);
+  }
+
+  .theme-scope .border-slate-200 {
+    border-color: #334155;
+  }
+
+  .theme-scope .border-slate-300 {
+    border-color: #475569;
+  }
+
+  .theme-scope .border-slate-400 {
+    border-color: #64748b;
+  }
+
+  .theme-scope .border-sky-100 {
+    border-color: rgba(56, 189, 248, 0.2);
+  }
+
+  .theme-scope .border-sky-200 {
+    border-color: rgba(56, 189, 248, 0.35);
+  }
+
+  .theme-scope .border-sky-300 {
+    border-color: rgba(56, 189, 248, 0.46);
+  }
+
+  .theme-scope .border-emerald-200 {
+    border-color: rgba(52, 211, 153, 0.35);
+  }
+
+  .theme-scope .border-emerald-300 {
+    border-color: rgba(52, 211, 153, 0.46);
+  }
+
+  .theme-scope .border-rose-200 {
+    border-color: rgba(251, 113, 133, 0.35);
+  }
+
+  .theme-scope .border-amber-200 {
+    border-color: rgba(251, 191, 36, 0.32);
+  }
+
+  .theme-scope .border-violet-200 {
+    border-color: rgba(167, 139, 250, 0.38);
+  }
+
+  .theme-scope .border-indigo-200 {
+    border-color: rgba(129, 140, 248, 0.38);
+  }
+
+  .theme-scope .text-slate-100 {
+    color: #e2e8f0;
+  }
+
+  .theme-scope .text-slate-400,
+  .theme-scope .text-slate-500 {
+    color: #94a3b8;
+  }
+
+  .theme-scope .text-slate-600 {
+    color: #cbd5e1;
+  }
+
+  .theme-scope .text-slate-700 {
+    color: #e2e8f0;
+  }
+
+  .theme-scope .text-slate-800 {
+    color: #f1f5f9;
+  }
+
+  .theme-scope .text-slate-900 {
+    color: #f8fafc;
+  }
+
+  .theme-scope .text-sky-600 {
+    color: #38bdf8;
+  }
+
+  .theme-scope .text-sky-700 {
+    color: #7dd3fc;
+  }
+
+  .theme-scope .text-sky-800 {
+    color: #bae6fd;
+  }
+
+  .theme-scope .text-emerald-700 {
+    color: #6ee7b7;
+  }
+
+  .theme-scope .text-emerald-800 {
+    color: #a7f3d0;
+  }
+
+  .theme-scope .text-rose-600,
+  .theme-scope .text-rose-700 {
+    color: #fda4af;
+  }
+
+  .theme-scope .text-amber-700 {
+    color: #fcd34d;
+  }
+
+  .theme-scope .text-violet-700 {
+    color: #c4b5fd;
+  }
+
+  .theme-scope .text-indigo-700 {
+    color: #a5b4fc;
+  }
+
+  .theme-scope :where(input, textarea, select) {
+    color: #f8fafc;
+  }
+
+  .theme-scope :where(input, textarea, select)::placeholder {
+    color: #94a3b8;
+  }
+
+  .theme-scope select option {
+    background-color: #0f172a;
+    color: #f8fafc;
+  }
+
+  .theme-scope .hover\:bg-sky-100:hover {
+    background-color: rgba(12, 74, 110, 0.52);
+  }
+
+  .theme-scope .hover\:bg-violet-100:hover {
+    background-color: rgba(76, 29, 149, 0.4);
+  }
+
+  .theme-scope .hover\:bg-indigo-100:hover {
+    background-color: rgba(49, 46, 129, 0.42);
+  }
+
+  .theme-scope .hover\:bg-emerald-100:hover {
+    background-color: rgba(6, 95, 70, 0.42);
+  }
+
+  .theme-scope .hover\:bg-rose-50:hover {
+    background-color: rgba(127, 29, 29, 0.38);
+  }
+
+  .theme-scope .hover\:bg-slate-100:hover,
+  .theme-scope .hover\:bg-slate-700:hover {
+    background-color: #1e293b;
+  }
+
+  .theme-scope .hover\:border-slate-400:hover {
+    border-color: #64748b;
+  }
+
+  .theme-scope .hover\:text-slate-700:hover {
+    color: #f8fafc;
+  }
+
+  .theme-scope .hover\:text-sky-700:hover {
+    color: #bae6fd;
   }
 }
