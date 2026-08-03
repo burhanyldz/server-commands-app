@@ -3,6 +3,7 @@ import { startRegistration } from '@simplewebauthn/browser';
 import { formatAuthError, useAuth } from './auth';
 import { api, extractApiError } from './lib/api';
 import type {
+  ChainTemplate,
   CommandRecord,
   CommandRun,
   CommandShell,
@@ -57,6 +58,15 @@ const createStepFromCommand = (command: CommandRecord): StepDraft => ({
 });
 
 const createStepFromRun = (step: CommandRun['steps'][number]): StepDraft => ({
+  id: createDraftId(),
+  label: step.label,
+  command: step.command,
+  shell: step.shell,
+  runAsSystem: step.runAsSystem,
+  timeoutMs: step.timeoutMs ? String(step.timeoutMs) : ''
+});
+
+const createStepFromTemplate = (step: ChainTemplate['steps'][number]): StepDraft => ({
   id: createDraftId(),
   label: step.label,
   command: step.command,
@@ -532,6 +542,7 @@ const DashboardScreen = () => {
 
   const [directories, setDirectories] = useState<DirectoryRecord[]>([]);
   const [commands, setCommands] = useState<CommandRecord[]>([]);
+  const [shortcuts, setShortcuts] = useState<ChainTemplate[]>([]);
   const [runs, setRuns] = useState<CommandRun[]>([]);
 
   const [directoryLabel, setDirectoryLabel] = useState('');
@@ -547,6 +558,13 @@ const DashboardScreen = () => {
   const [runName, setRunName] = useState('');
   const [runDirectoryId, setRunDirectoryId] = useState('');
   const [runSteps, setRunSteps] = useState<StepDraft[]>([]);
+
+  const [isShortcutModalOpen, setIsShortcutModalOpen] = useState(false);
+  const [editingShortcutId, setEditingShortcutId] = useState<string | null>(null);
+  const [shortcutName, setShortcutName] = useState('');
+  const [shortcutDescription, setShortcutDescription] = useState('');
+  const [shortcutDirectoryId, setShortcutDirectoryId] = useState('');
+  const [shortcutSteps, setShortcutSteps] = useState<StepDraft[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -609,13 +627,15 @@ const DashboardScreen = () => {
     setIsLoading(true);
 
     try {
-      const [directoryData, commandData] = await Promise.all([
+      const [directoryData, commandData, shortcutData] = await Promise.all([
         api.listDirectories(),
-        api.listCommands()
+        api.listCommands(),
+        api.listChainTemplates()
       ]);
 
       setDirectories(directoryData);
       setCommands(commandData);
+      setShortcuts(shortcutData);
 
       if (!runDirectoryId && directoryData.length > 0) {
         setRunDirectoryId(directoryData[0]._id);
@@ -645,7 +665,7 @@ const DashboardScreen = () => {
   }, [runsPage]);
 
   useEffect(() => {
-    if (!isDefinitionsModalOpen && !isSecurityModalOpen) {
+    if (!isDefinitionsModalOpen && !isSecurityModalOpen && !isShortcutModalOpen) {
       return;
     }
 
@@ -653,12 +673,13 @@ const DashboardScreen = () => {
       if (event.key === 'Escape') {
         setIsDefinitionsModalOpen(false);
         setIsSecurityModalOpen(false);
+        setIsShortcutModalOpen(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDefinitionsModalOpen, isSecurityModalOpen]);
+  }, [isDefinitionsModalOpen, isSecurityModalOpen, isShortcutModalOpen]);
 
   useEffect(() => {
     if (!isDefinitionsModalOpen) {
@@ -846,6 +867,114 @@ const DashboardScreen = () => {
     setRunSteps([]);
     setError(null);
     setMessage('Ad-hoc run form cleared.');
+  };
+
+  const resetShortcutForm = () => {
+    setEditingShortcutId(null);
+    setShortcutName('');
+    setShortcutDescription('');
+    setShortcutDirectoryId(directories[0]?._id ?? '');
+    setShortcutSteps([]);
+  };
+
+  const closeShortcutModal = () => {
+    setIsShortcutModalOpen(false);
+    resetShortcutForm();
+  };
+
+  const openNewShortcut = () => {
+    resetShortcutForm();
+    setIsShortcutModalOpen(true);
+  };
+
+  const openCurrentRunAsShortcut = () => {
+    if (!runDirectoryId || runSteps.length === 0 || runSteps.some((step) => !isStepDraftValid(step))) {
+      setError('Add a directory and at least one valid run step before saving a favorite.');
+      return;
+    }
+
+    setEditingShortcutId(null);
+    setShortcutName(runName.trim());
+    setShortcutDescription('');
+    setShortcutDirectoryId(runDirectoryId);
+    setShortcutSteps(runSteps.map((step) => ({ ...step, id: createDraftId() })));
+    setError(null);
+    setIsShortcutModalOpen(true);
+  };
+
+  const openShortcutForEditing = (shortcut: ChainTemplate) => {
+    const savedDirectoryExists = directories.some((directory) => directory._id === shortcut.directoryId);
+    setEditingShortcutId(shortcut._id);
+    setShortcutName(shortcut.name);
+    setShortcutDescription(shortcut.description ?? '');
+    setShortcutDirectoryId(savedDirectoryExists ? shortcut.directoryId ?? '' : directories[0]?._id ?? '');
+    setShortcutSteps(
+      shortcut.steps
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map(createStepFromTemplate)
+    );
+    setError(null);
+    setIsShortcutModalOpen(true);
+  };
+
+  const handleSaveShortcut = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!shortcutDirectoryId) {
+      setError('Select a directory for the favorite shortcut.');
+      return;
+    }
+
+    if (!shortcutSteps.length || shortcutSteps.some((step) => !isStepDraftValid(step))) {
+      setError('Every favorite shortcut step must have a label and command.');
+      return;
+    }
+
+    await withSubmission(async () => {
+      const payload = {
+        name: shortcutName.trim(),
+        description: shortcutDescription.trim(),
+        directoryId: shortcutDirectoryId,
+        steps: serializeDraftSteps(shortcutSteps)
+      };
+
+      if (editingShortcutId) {
+        await api.updateChainTemplate(editingShortcutId, payload);
+        setMessage('Favorite shortcut updated.');
+      } else {
+        await api.createChainTemplate(payload);
+        setMessage('Favorite shortcut saved.');
+      }
+
+      closeShortcutModal();
+      await loadEverything();
+    });
+  };
+
+  const handleRunShortcut = async (shortcut: ChainTemplate) => {
+    const directoryId = directories.find((directory) => directory._id === shortcut.directoryId)?._id;
+    if (!directoryId) {
+      setError(`“${shortcut.name}” needs a valid directory. Edit the shortcut before running it.`);
+      return;
+    }
+
+    await withSubmission(async () => {
+      await api.createCommandRun({
+        templateId: shortcut._id,
+        directoryId
+      });
+      setMessage(`“${shortcut.name}” queued.`);
+      await loadRuns(true);
+    });
+  };
+
+  const handleDeleteShortcut = async (id: string) => {
+    await withSubmission(async () => {
+      await api.deleteChainTemplate(id);
+      setShortcuts((current) => current.filter((shortcut) => shortcut._id !== id));
+      setMessage('Favorite shortcut deleted.');
+    });
   };
 
   const handleDeleteDirectory = async (id: string) => {
@@ -1036,7 +1165,87 @@ const DashboardScreen = () => {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[1.1fr_1fr]">
+      <section className="mx-auto max-w-7xl px-4 pt-5 sm:px-6" aria-labelledby="favorite-shortcuts-title">
+        <div className="rounded-2xl border border-amber-200 bg-white/85 p-4 shadow-[0_8px_24px_rgba(120,53,15,0.08)] backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 id="favorite-shortcuts-title" className="text-sm font-black uppercase tracking-wide text-slate-800">
+                ★ Favorite Shortcuts
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500">Run a saved multi-command workflow with one click.</p>
+            </div>
+            <button
+              type="button"
+              onClick={openNewShortcut}
+              disabled={isSubmitting}
+              className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
+            >
+              + New Shortcut
+            </button>
+          </div>
+
+          {isLoading ? (
+            <p className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Loading favorite shortcuts...
+            </p>
+          ) : shortcuts.length === 0 ? (
+            <button
+              type="button"
+              onClick={openNewShortcut}
+              className="mt-3 w-full rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-left text-sm text-slate-500 transition hover:border-amber-300"
+            >
+              No favorites yet. Create a shortcut for the command groups you use often.
+            </button>
+          ) : (
+            <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+              {shortcuts.map((shortcut) => {
+                const directory = directories.find((item) => item._id === shortcut.directoryId);
+                return (
+                  <article
+                    key={shortcut._id}
+                    className="flex min-w-[230px] max-w-sm flex-1 items-stretch overflow-hidden rounded-xl border border-amber-200 bg-amber-50"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void handleRunShortcut(shortcut)}
+                      disabled={isSubmitting || shortcut.steps.length === 0 || !directory}
+                      className="min-w-0 flex-1 px-3 py-2.5 text-left transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      title={`Run ${shortcut.name}`}
+                    >
+                      <span className="block truncate text-sm font-black text-slate-900">▶ {shortcut.name}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-slate-600">
+                        {shortcut.steps.length} step{shortcut.steps.length === 1 ? '' : 's'} · {directory?.label ?? 'Select directory'}
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 flex-col border-l border-amber-200 bg-white/60">
+                      <button
+                        type="button"
+                        onClick={() => openShortcutForEditing(shortcut)}
+                        disabled={isSubmitting}
+                        className="flex-1 px-2.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 transition hover:bg-sky-50 disabled:opacity-60"
+                        aria-label={`Edit ${shortcut.name}`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteShortcut(shortcut._id)}
+                        disabled={isSubmitting}
+                        className="flex-1 border-t border-amber-200 px-2.5 text-[10px] font-bold uppercase tracking-wide text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
+                        aria-label={`Delete ${shortcut.name}`}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <main className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[1.1fr_1fr]">
         <section className="space-y-4">
           {message && <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{message}</p>}
           {error && <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>}
@@ -1071,7 +1280,7 @@ const DashboardScreen = () => {
                 setSteps={setRunSteps}
               />
 
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <button
                   type="button"
                   onClick={handleClearRunForm}
@@ -1081,9 +1290,17 @@ const DashboardScreen = () => {
                   Clear Form
                 </button>
                 <button
+                  type="button"
+                  onClick={openCurrentRunAsShortcut}
+                  disabled={isSubmitting || runSteps.length === 0}
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
+                >
+                  ★ Save as Favorite
+                </button>
+                <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
+                  className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
                 >
                   Queue Ad-hoc Run
                 </button>
@@ -1193,6 +1410,110 @@ const DashboardScreen = () => {
           </article>
         </section>
       </main>
+
+      {isShortcutModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={editingShortcutId ? 'Edit favorite shortcut' : 'Create favorite shortcut'}
+          onClick={closeShortcutModal}
+        >
+          <section
+            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-amber-200 bg-white p-5 shadow-[0_25px_60px_rgba(15,23,42,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700">Favorite Shortcut</p>
+                <h2 className="text-xl font-black text-slate-900">
+                  {editingShortcutId ? 'Update Multi-command Shortcut' : 'Create Multi-command Shortcut'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeShortcutModal}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-700 transition hover:border-slate-400"
+              >
+                Close
+              </button>
+            </div>
+
+            <p className="mt-2 text-sm text-slate-600">
+              Steps run in the order shown. Clicking the shortcut queues one run and adds it to Command Run History.
+            </p>
+
+            {error && <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</p>}
+
+            <form className="mt-4 space-y-3" onSubmit={handleSaveShortcut}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-slate-700">
+                  Shortcut name
+                  <input
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                    placeholder="e.g. Deploy application"
+                    value={shortcutName}
+                    onChange={(event) => setShortcutName(event.target.value)}
+                    required
+                    autoFocus
+                  />
+                </label>
+                <label className="text-xs font-semibold text-slate-700">
+                  Working directory
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                    value={shortcutDirectoryId}
+                    onChange={(event) => setShortcutDirectoryId(event.target.value)}
+                    required
+                  >
+                    <option value="" disabled>Select a directory</option>
+                    {directories.map((directory) => (
+                      <option key={directory._id} value={directory._id}>
+                        {directory.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="block text-xs font-semibold text-slate-700">
+                Description (optional)
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                  placeholder="What this shortcut does"
+                  value={shortcutDescription}
+                  onChange={(event) => setShortcutDescription(event.target.value)}
+                />
+              </label>
+
+              <StepBuilder
+                title="Shortcut Steps"
+                commands={commands}
+                steps={shortcutSteps}
+                setSteps={setShortcutSteps}
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeShortcutModal}
+                  disabled={isSubmitting}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || shortcutSteps.length === 0}
+                  className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-amber-400 disabled:opacity-60"
+                >
+                  {isSubmitting ? 'Saving...' : editingShortcutId ? 'Update Shortcut' : 'Save Shortcut'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       {isSecurityModalOpen && (
         <div

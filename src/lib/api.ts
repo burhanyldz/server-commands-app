@@ -149,8 +149,18 @@ export const api = {
     return response.data;
   },
 
+  async updateChainTemplate(id: string, payload: {
+    name?: string;
+    description?: string;
+    directoryId?: string | null;
+    steps?: CommandStepInput[];
+  }): Promise<ChainTemplate> {
+    const response = await client.put(`/api/chain-templates/${encodeURIComponent(id)}`, payload);
+    return response.data;
+  },
+
   async deleteChainTemplate(id: string): Promise<void> {
-    await client.delete(`/api/chain-templates/${id}`);
+    await client.delete(`/api/chain-templates/${encodeURIComponent(id)}`);
   },
 
   async listCommandRuns(skip = 0, limit = 20): Promise<{ data: CommandRun[]; total: number }> {
