@@ -39,6 +39,7 @@ export interface CommandRecord {
 export interface CommandStepInput {
   order?: number;
   commandId?: string;
+  directoryId?: string;
   label?: string;
   command?: string;
   shell?: CommandShell;
@@ -48,6 +49,7 @@ export interface CommandStepInput {
 
 export interface ChainTemplateStep {
   commandId?: string;
+  directoryId?: string;
   label: string;
   command: string;
   order: number;
@@ -67,6 +69,8 @@ export interface ChainTemplate {
 }
 
 export interface CommandRunStep extends ChainTemplateStep {
+  directoryLabel?: string;
+  directoryPath?: string;
   completed: boolean;
   completedAt?: string;
   error?: boolean;

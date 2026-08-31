@@ -15,6 +15,7 @@ import type {
 interface StepDraft {
   id: string;
   commandId?: string;
+  directoryId?: string;
   label: string;
   command: string;
   shell: CommandShell;
@@ -59,6 +60,7 @@ const createStepFromCommand = (command: CommandRecord): StepDraft => ({
 
 const createStepFromRun = (step: CommandRun['steps'][number]): StepDraft => ({
   id: createDraftId(),
+  directoryId: step.directoryId,
   label: step.label,
   command: step.command,
   shell: step.shell,
@@ -68,6 +70,7 @@ const createStepFromRun = (step: CommandRun['steps'][number]): StepDraft => ({
 
 const createStepFromTemplate = (step: ChainTemplate['steps'][number]): StepDraft => ({
   id: createDraftId(),
+  directoryId: step.directoryId,
   label: step.label,
   command: step.command,
   shell: step.shell,
@@ -91,12 +94,14 @@ const serializeDraftSteps = (steps: StepDraft[]): CommandStepInput[] => {
     if (step.commandId) {
       return {
         order: index + 1,
-        commandId: step.commandId
+        commandId: step.commandId,
+        directoryId: step.directoryId
       };
     }
 
     return {
       order: index + 1,
+      directoryId: step.directoryId,
       label: step.label.trim(),
       command: step.command.trim(),
       shell: step.shell,
@@ -133,17 +138,22 @@ const StatusBadge = ({ run }: { run: CommandRun }) => {
 const StepBuilder = ({
   title,
   commands,
+  directories,
+  defaultDirectoryId,
   steps,
   setSteps
 }: {
   title: string;
   commands: CommandRecord[];
+  directories: DirectoryRecord[];
+  defaultDirectoryId: string;
   steps: StepDraft[];
   setSteps: Dispatch<SetStateAction<StepDraft[]>>;
 }) => {
   const [selectedCommandId, setSelectedCommandId] = useState('');
 
   const effectiveSelectedId = selectedCommandId || (commands.length > 0 ? commands[0]._id : '');
+  const defaultDirectory = directories.find((directory) => directory._id === defaultDirectoryId);
 
   const addSavedCommand = () => {
     const selected = commands.find((command) => command._id === effectiveSelectedId);
@@ -289,6 +299,27 @@ const StepBuilder = ({
                 </select>
               </label>
             </div>
+
+            <label className="mt-2 block text-xs font-semibold text-slate-700">
+              Working directory
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                value={step.directoryId ?? ''}
+                onChange={(event) => updateStep(step.id, { directoryId: event.target.value || undefined })}
+              >
+                <option value="">
+                  Use default{defaultDirectory ? ` — ${defaultDirectory.label}` : ''}
+                </option>
+                {directories.map((directory) => (
+                  <option key={directory._id} value={directory._id}>
+                    {directory.label} — {directory.path}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block font-normal text-slate-500">
+                Leave as default to keep following the working directory selected above.
+              </span>
+            </label>
 
             <label className="mt-2 block text-xs font-semibold text-slate-700">
               Command
@@ -1200,6 +1231,10 @@ const DashboardScreen = () => {
             <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
               {shortcuts.map((shortcut) => {
                 const directory = directories.find((item) => item._id === shortcut.directoryId);
+                const hasMissingStepDirectory = shortcut.steps.some(
+                  (step) => step.directoryId && !directories.some((item) => item._id === step.directoryId)
+                );
+                const customDirectoryCount = shortcut.steps.filter((step) => step.directoryId).length;
                 return (
                   <article
                     key={shortcut._id}
@@ -1208,13 +1243,14 @@ const DashboardScreen = () => {
                     <button
                       type="button"
                       onClick={() => void handleRunShortcut(shortcut)}
-                      disabled={isSubmitting || shortcut.steps.length === 0 || !directory}
+                      disabled={isSubmitting || shortcut.steps.length === 0 || !directory || hasMissingStepDirectory}
                       className="min-w-0 flex-1 px-3 py-2.5 text-left transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                       title={`Run ${shortcut.name}`}
                     >
                       <span className="block truncate text-sm font-black text-slate-900">▶ {shortcut.name}</span>
                       <span className="mt-0.5 block truncate text-[11px] text-slate-600">
                         {shortcut.steps.length} step{shortcut.steps.length === 1 ? '' : 's'} · {directory?.label ?? 'Select directory'}
+                        {customDirectoryCount > 0 ? ` · ${customDirectoryCount} override` : ''}
                       </span>
                     </button>
                     <div className="flex shrink-0 flex-col border-l border-amber-200 bg-white/60">
@@ -1260,22 +1296,30 @@ const DashboardScreen = () => {
                 value={runName}
                 onChange={(event) => setRunName(event.target.value)}
               />
-              <select
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                value={runDirectoryId}
-                onChange={(event) => setRunDirectoryId(event.target.value)}
-                required
-              >
-                {directories.map((directory) => (
-                  <option key={directory._id} value={directory._id}>
-                    {directory.label}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-xs font-semibold text-slate-700">
+                Default working directory
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={runDirectoryId}
+                  onChange={(event) => setRunDirectoryId(event.target.value)}
+                  required
+                >
+                  {directories.map((directory) => (
+                    <option key={directory._id} value={directory._id}>
+                      {directory.label} — {directory.path}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block font-normal text-slate-500">
+                  New steps follow this directory until you choose an override on that step.
+                </span>
+              </label>
 
               <StepBuilder
                 title="Run Steps"
                 commands={commands}
+                directories={directories}
+                defaultDirectoryId={runDirectoryId}
                 steps={runSteps}
                 setSteps={setRunSteps}
               />
@@ -1354,6 +1398,11 @@ const DashboardScreen = () => {
                             </p>
                             <p className="text-[11px] text-slate-500">{step.completed ? formatDate(step.completedAt) : 'Pending'}</p>
                           </div>
+                          {step.directoryPath && (
+                            <p className="mt-1 break-all font-mono text-[11px] text-sky-700">
+                              cwd: {step.directoryPath}
+                            </p>
+                          )}
                           <p className="mt-1 break-all font-mono text-[11px] text-slate-600">{step.command}</p>
                           {step.log && (
                             <details className="mt-1 rounded border border-slate-200 bg-slate-50 p-1.5">
@@ -1459,7 +1508,7 @@ const DashboardScreen = () => {
                   />
                 </label>
                 <label className="text-xs font-semibold text-slate-700">
-                  Working directory
+                  Default working directory
                   <select
                     className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                     value={shortcutDirectoryId}
@@ -1469,7 +1518,7 @@ const DashboardScreen = () => {
                     <option value="" disabled>Select a directory</option>
                     {directories.map((directory) => (
                       <option key={directory._id} value={directory._id}>
-                        {directory.label}
+                        {directory.label} — {directory.path}
                       </option>
                     ))}
                   </select>
@@ -1489,6 +1538,8 @@ const DashboardScreen = () => {
               <StepBuilder
                 title="Shortcut Steps"
                 commands={commands}
+                directories={directories}
+                defaultDirectoryId={shortcutDirectoryId}
                 steps={shortcutSteps}
                 setSteps={setShortcutSteps}
               />
