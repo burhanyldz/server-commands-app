@@ -359,14 +359,12 @@ const StepBuilder = ({
 };
 
 const LoginScreen = () => {
-  const { login, loginWithPasskey, bootstrapAdmin, twoFactorPending, completeTotpLogin, logout } = useAuth();
+  const { login, loginWithPasskey, twoFactorPending, completeTotpLogin, logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [bootstrapToken, setBootstrapToken] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showBootstrap, setShowBootstrap] = useState(false);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -392,20 +390,6 @@ const LoginScreen = () => {
     } catch (err) {
       setError(formatAuthError(err));
       setTotpCode('');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleBootstrap = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      await bootstrapAdmin(email, password, bootstrapToken);
-    } catch (err) {
-      setError(formatAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -535,35 +519,6 @@ const LoginScreen = () => {
           {isSubmitting ? 'Verifying…' : 'Sign in with Touch ID / Passkey'}
         </button>
 
-        <button
-          type="button"
-          className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500 transition hover:text-sky-700"
-          onClick={() => setShowBootstrap((value) => !value)}
-        >
-          {showBootstrap ? 'Hide bootstrap form' : 'Need first admin? Bootstrap one'}
-        </button>
-
-        {showBootstrap && (
-          <form className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4" onSubmit={handleBootstrap}>
-            <label className="block text-xs font-bold uppercase tracking-wide text-slate-600">
-              Bootstrap token
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium"
-                type="password"
-                value={bootstrapToken}
-                onChange={(event) => setBootstrapToken(event.target.value)}
-                required
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white transition hover:bg-slate-700 disabled:opacity-60"
-            >
-              {isSubmitting ? 'Creating...' : 'Create first admin'}
-            </button>
-          </form>
-        )}
       </section>
     </main>
   );
