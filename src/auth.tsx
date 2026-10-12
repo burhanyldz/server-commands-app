@@ -84,6 +84,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const authResponse = await startAuthentication({ optionsJSON: options as any });
         const response = await api.passkeyLoginVerify(ct, authResponse);
+        if (response.requiresTwoFactor) {
+          setChallengeToken(response.challengeToken);
+          return;
+        }
         persistAuth(response.token, response.user);
         setUser(response.user);
       },

@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
 import { formatAuthError, useAuth } from './auth';
 import { api, extractApiError } from './lib/api';
+import { UsersPanel } from './UsersPanel';
 import type {
   ChainTemplate,
   CommandRecord,
@@ -570,6 +571,7 @@ const LoginScreen = () => {
 
 const DashboardScreen = () => {
   const { user, logout, setup2FA, confirm2FA, disable2FA } = useAuth();
+  const [isUsersPanelOpen, setIsUsersPanelOpen] = useState(false);
 
   const [directories, setDirectories] = useState<DirectoryRecord[]>([]);
   const [commands, setCommands] = useState<CommandRecord[]>([]);
@@ -1156,7 +1158,7 @@ const DashboardScreen = () => {
             <h1 className="text-xl font-black sm:text-2xl">Ad-hoc Command Center</h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="hidden text-right text-sm text-slate-600 sm:block">
               <p className="font-semibold text-slate-800">{user?.email}</p>
               <p>{user?.role}</p>
@@ -1168,6 +1170,11 @@ const DashboardScreen = () => {
             >
               Security
             </button>
+            {user?.role === 'admin' && (
+              <button type="button" onClick={() => setIsUsersPanelOpen(true)} className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-indigo-700 transition hover:bg-indigo-100">
+                Kullanıcılar
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -1566,6 +1573,8 @@ const DashboardScreen = () => {
         </div>
       )}
 
+      {isUsersPanelOpen && user?.role === 'admin' && <UsersPanel onClose={() => setIsUsersPanelOpen(false)} />}
+
       {isSecurityModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-8"
@@ -1699,7 +1708,7 @@ const DashboardScreen = () => {
             <div className="mt-6">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-700">Passkeys</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                Sign in instantly with Touch ID, Face ID, or your device's iCloud Keychain — no authenticator app needed.
+                Sign in with Touch ID, Face ID, or your device's iCloud Keychain. If 2FA is enabled, your authenticator code is also required.
               </p>
 
               {isLoadingPasskeys ? (

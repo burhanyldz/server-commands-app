@@ -6,7 +6,9 @@ import type {
   CommandRun,
   CommandStepInput,
   DirectoryRecord,
-  PasskeyRecord
+  PasskeyRecord,
+  LoginResponse,
+  UserRecord
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5100';
@@ -42,10 +44,7 @@ export const extractApiError = (error: unknown): string => {
 };
 
 export const api = {
-  async login(email: string, password: string): Promise<
-    | { token: string; user: AuthUser; requiresTwoFactor?: never; challengeToken?: never }
-    | { requiresTwoFactor: true; challengeToken: string; token?: never; user?: never }
-  > {
+  async login(email: string, password: string): Promise<LoginResponse> {
     const response = await client.post('/api/auth/login', { email, password });
     return response.data;
   },
@@ -71,6 +70,16 @@ export const api = {
 
   async currentUser(): Promise<{ user: AuthUser }> {
     const response = await client.get('/api/auth/me');
+    return response.data;
+  },
+
+  async listUsers(): Promise<UserRecord[]> {
+    const response = await client.get('/api/users');
+    return response.data.data;
+  },
+
+  async createUser(email: string, password: string): Promise<{ user: UserRecord }> {
+    const response = await client.post('/api/users', { email, password });
     return response.data;
   },
 
@@ -210,7 +219,7 @@ export const api = {
     return response.data;
   },
 
-  async passkeyLoginVerify(challengeToken: string, authenticationResponse: unknown): Promise<{ token: string; user: AuthUser }> {
+  async passkeyLoginVerify(challengeToken: string, authenticationResponse: unknown): Promise<LoginResponse> {
     const response = await client.post('/api/auth/passkey/login-verify', { challengeToken, authenticationResponse });
     return response.data;
   },

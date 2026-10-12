@@ -51,6 +51,9 @@ Important:
 ## Features
 
 - Dedicated auth flow (login + first-admin bootstrap)
+- Admin-only user creation/listing via **Kullanıcılar**; new admins share the command workspace
+- Per-account optional TOTP via **Security → Set Up 2FA → Enable 2FA**
+- Password and passkey login both request a TOTP code when the user enables 2FA
 - Directory registry (server paths)
 - Command library (label + shell command + runAsSystem)
 - Ad-hoc command run queue

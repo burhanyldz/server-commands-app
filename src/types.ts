@@ -15,6 +15,14 @@ export interface PasskeyRecord {
   createdAt: string;
 }
 
+export type LoginResponse =
+  | { token: string; user: AuthUser; requiresTwoFactor?: never; challengeToken?: never }
+  | { requiresTwoFactor: true; challengeToken: string; token?: never; user?: never };
+
+export interface UserRecord extends AuthUser {
+  createdAt: string;
+}
+
 export interface DirectoryRecord {
   _id: string;
   label: string;
